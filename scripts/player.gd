@@ -5,7 +5,21 @@ const TextureGen := preload("res://scripts/texture_gen.gd")
 
 const SPEED := 150.0
 
-var facing := Vector2.DOWN
+var facing := Vector2.DOWN:
+	set(val):
+		facing = val
+		if val != Vector2.ZERO:
+			if absf(val.x) >= absf(val.y):
+				_dir = "side"
+				if _sprite:
+					_sprite.flip_h = val.x < 0
+			else:
+				_dir = "up" if val.y < 0 else "down"
+				if _sprite:
+					_sprite.flip_h = false
+			if _sprite:
+				_update_tex(0)
+
 var can_move := true
 
 var _sprite: Sprite2D
@@ -16,8 +30,8 @@ var _anim_t := 0.0
 func _ready() -> void:
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	_sprite = Sprite2D.new()
-	_sprite.scale = Vector2(2, 2)
-	_sprite.offset = Vector2(0, -8)
+	_sprite.scale = Vector2(1.2, 1.2)
+	_sprite.offset = Vector2(0, -18)
 	add_child(_sprite)
 	var col := CollisionShape2D.new()
 	var shape := CircleShape2D.new()
@@ -47,7 +61,7 @@ func _physics_process(delta: float) -> void:
 			_dir = "up" if v.y < 0 else "down"
 			_sprite.flip_h = false
 		_anim_t += delta
-		_update_tex(int(_anim_t * 6.0) % 2)
+		_update_tex(int(_anim_t * 8.0) % 4)
 	else:
 		_anim_t = 0.0
 		_update_tex(0)
@@ -59,10 +73,12 @@ func get_facing_point() -> Vector2:
 
 # Nhún người ngắn khi làm hành động (cày / gieo / tưới / thu hoạch).
 func play_action_anim() -> void:
+	_update_tex(99)
 	var tw := create_tween()
-	tw.tween_property(_sprite, "scale", Vector2(2.35, 1.7), 0.1)
-	tw.tween_property(_sprite, "scale", Vector2(1.75, 2.3), 0.12)
-	tw.tween_property(_sprite, "scale", Vector2(2, 2), 0.1)
+	tw.tween_property(_sprite, "scale", Vector2(1.35, 1.05), 0.1)
+	tw.tween_property(_sprite, "scale", Vector2(1.05, 1.35), 0.12)
+	tw.tween_property(_sprite, "scale", Vector2(1.2, 1.2), 0.1)
+	tw.tween_callback(func(): _update_tex(0))
 
 
 func _update_tex(frame: int) -> void:

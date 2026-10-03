@@ -2,3 +2,7 @@
 .godot/
 /android/
 /build/
+
+# Temp unpacked assets & AI config
+Content (unpacked)/
+.agent/

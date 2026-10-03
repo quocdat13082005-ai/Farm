@@ -18,9 +18,15 @@ func setup(o: Vector2, s: Vector2i) -> void:
 	for y in s.y:
 		for x in s.x:
 			var t := FarmTileScript.new()
+			t.farm = self
 			t.setup(Vector2i(x, y))
 			add_child(t)
 			tiles[Vector2i(x, y)] = t
+
+
+func has_soil(c: Vector2i) -> bool:
+	var t = tiles.get(c)
+	return t != null and t.tstate != FarmTileScript.TState.GRASS
 
 
 func tile_at_world(p: Vector2) -> Node:
@@ -49,9 +55,7 @@ func action_at(tile) -> Dictionary:
 		if sid != "" and GameState.has_crop(sid) and Inventory.seed_count(sid) > 0:
 			var cs := CropDB.get_crop(sid)
 			return {"act": "plant", "label": "Gieo hạt %s (còn ×%d)" % [cs.get("name", "?"), Inventory.seed_count(sid)], "ok": true}
-		if not tile.watered:
-			return {"act": "water", "label": "Tưới nước (đất trống)", "ok": true}
-		return {"act": "none", "label": "Chờ gieo hạt — bấm I để chọn hạt", "ok": false}
+		return {"act": "none", "label": "Chưa gieo hạt (bấm I để chọn hạt gieo trước khi tưới)", "ok": false}
 	if tile.tstate == FarmTileScript.TState.PLANTED:
 		var c2 := CropDB.get_crop(tile.crop_id)
 		var pct := int(clampf(tile.growth / float(c2.get("grow_sec", 1)) * 100.0, 0.0, 99.0))
@@ -72,6 +76,8 @@ func perform_at(tile) -> String:
 			tile.till()
 			return "Đã cày đất! (Còn %d cuốc)" % Inventory.hoes
 		"water":
+			if tile.tstate != FarmTileScript.TState.PLANTED:
+				return "Cần gieo hạt giống trước khi tưới nước!"
 			tile.water()
 			return "Đã tưới nước!"
 		"plant":

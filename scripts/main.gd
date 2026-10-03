@@ -18,19 +18,21 @@ const TitleScreenScript := preload("res://scripts/ui/title_screen.gd")
 const PauseMenuScript := preload("res://scripts/ui/pause_menu.gd")
 const MinimapScript := preload("res://scripts/ui/minimap.gd")
 const TouchControlsScript := preload("res://scripts/ui/touch_controls.gd")
+const MailboxPanelScript := preload("res://scripts/ui/mailbox_panel.gd")
 const UIKit := preload("res://scripts/ui/ui_kit.gd")
 
 const WORLD_SIZE := Vector2(1500, 1000)
-const FARM_ORIGIN := Vector2(420, 380)
+const FARM_ORIGIN := Vector2(424, 384)
 const FARM_TILES := Vector2i(14, 9)
-const HOUSE_POS := Vector2(250, 230)
-const STAND_POS := Vector2(1180, 348)       # quầy Bác Tư
-const STAND_HAI_POS := Vector2(1350, 348)   # quầy Chú Hai
-const STAND_TU_POS := Vector2(1010, 348)    # quầy Cô Tư
-const NPC_POS := Vector2(1180, 362)         # điểm tương tác Bác Tư
-const CHU_HAI_POS := Vector2(1350, 362)     # điểm tương tác Chú Hai
-const COTU_POS := Vector2(1010, 362)        # điểm tương tác Cô Tư
-const SCARECROW_POS := Vector2(392, 356)
+const HOUSE_POS := Vector2(241, 248)
+const MAILBOX_POS := Vector2(320, 246)
+const STAND_POS := Vector2(1180, 416)       # quầy Bác Tư
+const STAND_HAI_POS := Vector2(1350, 416)   # quầy Chú Hai
+const STAND_TU_POS := Vector2(1010, 416)    # quầy Cô Tư
+const NPC_POS := Vector2(1180, 430)         # điểm tương tác Bác Tư
+const CHU_HAI_POS := Vector2(1350, 430)     # điểm tương tác Chú Hai
+const COTU_POS := Vector2(1010, 430)        # điểm tương tác Cô Tư
+const SCARECROW_POS := Vector2(648, 528)
 const PLAYER_START := Vector2(250, 470)
 const POND_RECT := Rect2(940, 760, 180, 100)
 const FISH_SPOT_POS := Vector2(1030, 810)   # tâm hồ — câu được ở MỌI bờ
@@ -46,17 +48,14 @@ const PEN_SPOTS := [                      # chỗ đứng con vật trong ô (so
 	Vector2(-8, 18), Vector2(22, -6), Vector2(-24, -4),
 ]
 
-# Mạng lối đi hình chữ nhật (24px) — trùng với đồ thị chỉ đường trong minimap.
-# Đại lộ đông-tây + nhánh nhà, 3 nhánh quầy hàng, nhánh cổng chuồng, nhánh bờ ao.
+# Mạng lối đi lát đất chuẩn Stardew Valley (lưới 16px).
+# Đại lộ đông-tây (48px = 3 ô) + các nhánh lối đi (32px = 2 ô).
 const PATHS := [
-	Rect2(238, 236, 24, 246),    # từ cửa nhà xuống đại lộ
-	Rect2(238, 458, 1162, 24),   # đại lộ đông - tây (qua 2 cổng ruộng)
-	Rect2(970, 370, 430, 24),    # lối chợ chạy trước 3 quầy
-	Rect2(998, 394, 24, 64),     # nhánh lên quầy Cô Tư
-	Rect2(1168, 394, 24, 64),    # nhánh lên quầy Bác Tư
-	Rect2(1338, 394, 24, 64),    # nhánh lên quầy Chú Hai
-	Rect2(292, 482, 24, 84),     # nhánh tới cổng chuồng gia cầm
-	Rect2(1018, 482, 24, 266),   # nhánh xuống bờ ao câu cá
+	Rect2(240, 240, 32, 224),    # từ cửa nhà xuống đại lộ (x: 240..272, y: 240..464)
+	Rect2(224, 448, 1184, 48),   # đại lộ đông - tây qua 2 cổng ruộng (x: 224..1408, y: 448..496)
+	Rect2(944, 352, 464, 96),    # khuôn viên chợ quê 3 quầy hàng liền sát đại lộ (x: 944..1408, y: 352..448)
+	Rect2(288, 480, 32, 96),     # nhánh tới cổng chuồng gia cầm (x: 288..320, y: 480..576)
+	Rect2(1024, 480, 32, 272),   # nhánh xuống bờ ao câu cá (x: 1024..1056, y: 480..752)
 ]
 
 enum Mode { TITLE, PLAY, DIALOG, PANEL }
@@ -80,6 +79,9 @@ var shop_panel: CanvasLayer
 var fish_shop: CanvasLayer
 var poultry_shop: CanvasLayer
 var inv_panel: CanvasLayer
+var mailbox_panel: CanvasLayer
+var mailbox_badge: PanelContainer
+var mailbox_data: Dictionary = {"hoes": 999, "coins": 999}
 var dialog_box: CanvasLayer
 var title_screen: CanvasLayer
 var pause_menu: CanvasLayer
@@ -92,6 +94,21 @@ var _npc_met := false
 var _npc_hai_met := false
 var _npc_tu_met := false
 var _dialog_next := "shop"
+
+var foliage_nodes: Array = []
+var foliage_data: Array = []
+
+const FOLIAGE_TYPES := [
+	{"name": "tree_oak", "weight": 20},
+	{"name": "tree_maple", "weight": 20},
+	{"name": "tree_pine", "weight": 18},
+	{"name": "tree_broadleaf", "weight": 12},
+	{"name": "bush_large", "weight": 8},
+	{"name": "bush_med", "weight": 8},
+	{"name": "bush_berry", "weight": 6},
+	{"name": "bush_small", "weight": 5},
+	{"name": "tree_stump", "weight": 3},
+]
 
 var fishing := false
 var fishing_left := 0.0
@@ -165,19 +182,14 @@ func _build_world() -> void:
 	highlight.visible = false
 	farm.add_child(highlight)
 
-	# nhà (chỗ ngủ)
-	_add_decor(TextureGen.get_tex("house"), HOUSE_POS, 1.5, Rect2(-66, -34, 132, 36))
-	# bù nhìn
-	_add_decor(TextureGen.get_tex("scarecrow"), SCARECROW_POS, 1.5, Rect2(0, 0, 0, 0))
-	# cây
-	for tpos in [
-		Vector2(90, 130), Vector2(300, 90), Vector2(420, 110), Vector2(720, 90),
-		Vector2(1010, 120), Vector2(1350, 110), Vector2(1150, 60), Vector2(1450, 300),
-		Vector2(60, 360), Vector2(1450, 540), Vector2(80, 700), Vector2(700, 760),
-		Vector2(740, 780), Vector2(500, 930), Vector2(820, 940), Vector2(1210, 900),
-		Vector2(1430, 780), Vector2(960, 640),
-	]:
-		_add_decor(TextureGen.get_tex("tree"), tpos, 1.5, Rect2(-7, -8, 14, 10))
+	# nhà (chỗ ngủ) - Nhà gỗ Stardew Valley
+	_add_decor(TextureGen.get_tex("house"), HOUSE_POS, 1.0, Rect2(-68, -140, 134, 104))
+	# hòm thư Stardew Valley cạnh bậc thềm hiên nhà
+	_build_mailbox()
+	# bù nhìn Stardew Valley
+	_add_decor(TextureGen.get_tex("scarecrow"), SCARECROW_POS, 1.5, Rect2(-6, -10, 12, 10))
+	# Hệ thống thực vật & cây cối mọc ngẫu nhiên trên bề mặt cỏ tự nhiên (Stardew Valley)
+	_populate_random_foliage(75)
 
 	_build_fences()
 	_build_walls()
@@ -220,7 +232,8 @@ func _build_world() -> void:
 	_build_pen()
 
 	interactables = [
-		{"pos": HOUSE_POS + Vector2(0, 16), "r": 54.0, "label": "Ngủ (sang ngày mới + lưu game)", "cb": _ask_sleep},
+		{"pos": HOUSE_POS + Vector2(15, -16), "r": 50.0, "label": "Ngủ (sang ngày mới + lưu game)", "cb": _ask_sleep},
+		{"pos": MAILBOX_POS, "r": 50.0, "label": "Hòm thư 📬", "cb": _open_mailbox},
 		{"pos": NPC_POS, "r": 60.0, "label": "Bác Tư — hạt giống & nông sản", "cb": _talk_npc},
 		{"pos": CHU_HAI_POS, "r": 60.0, "label": "Chú Hai — cần câu & thu mua cá", "cb": _talk_hai},
 		{"pos": COTU_POS, "r": 60.0, "label": "Cô Tư — mua gia cầm & chuồng", "cb": _talk_tu},
@@ -318,10 +331,12 @@ func _rebuild_pen() -> void:
 	for y in range(576, int(y_s) + 8, 32):
 		_add_sprite(fv, Vector2(120.0, y) - org, pen_node)
 		_add_sprite(fv, Vector2(392.0, y) - org, pen_node)
-	for x in range(136, 392, 32):
+	for x in [136, 168, 200, 232, 264, 296, 328, 360, 376]:
 		_add_sprite(fh, Vector2(x, y_s + 8.0) - org, pen_node)
-	for cpos in [Vector2(120, 560), Vector2(392, 560), Vector2(120, y_s + 8), Vector2(392, y_s + 8)]:
-		_add_sprite(fc, cpos - org, pen_node)
+	_add_sprite(TextureGen.get_tex("fence_corner_tl"), Vector2(120, 560) - org, pen_node)
+	_add_sprite(TextureGen.get_tex("fence_corner_tr"), Vector2(392, 560) - org, pen_node)
+	_add_sprite(TextureGen.get_tex("fence_corner_bl"), Vector2(120, y_s + 8) - org, pen_node)
+	_add_sprite(TextureGen.get_tex("fence_corner_br"), Vector2(392, y_s + 8) - org, pen_node)
 
 	# 3. Sân trong: nhà chuồng, máng ăn/nước, ổ đẻ, đống rơm
 	var coop := StaticBody2D.new()
@@ -455,9 +470,59 @@ func _rebuild_pen() -> void:
 		stw.tween_property(harvest_sign, "position:y", 6.0, 0.6).set_trans(Tween.TRANS_SINE)
 
 
+func _build_mailbox() -> void:
+	var tex := TextureGen.get_tex("mailbox")
+	if tex == null:
+		return
+	var body := StaticBody2D.new()
+	body.position = MAILBOX_POS
+	var spr := Sprite2D.new()
+	spr.texture = tex
+	spr.scale = Vector2(1.0, 1.0)
+	spr.offset = Vector2(0, -tex.get_height() / 2.0)
+	body.add_child(spr)
+
+	var col := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(12, 10)
+	col.shape = shape
+	col.position = Vector2(0, -5)
+	body.add_child(col)
+
+	# Biển báo thư mới lơ lửng trên hòm thư
+	mailbox_badge = PanelContainer.new()
+	mailbox_badge.add_theme_stylebox_override("panel", UIKit.badge_box(Color(0.24, 0.16, 0.08, 0.95), UIKit.COLOR_BORDER_GOLD, 6))
+	var bh := HBoxContainer.new()
+	bh.add_theme_constant_override("separation", 4)
+	mailbox_badge.add_child(bh)
+
+	var star_ic := TextureRect.new()
+	star_ic.texture = TextureGen.star_icon()
+	star_ic.custom_minimum_size = Vector2(12, 12)
+	star_ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	bh.add_child(star_ic)
+
+	UIKit.label(bh, "Thư mới [E]", 11, UIKit.COLOR_TEXT_TITLE)
+	mailbox_badge.position = Vector2(-36, -46)
+	body.add_child(mailbox_badge)
+
+	var tw := create_tween().set_loops()
+	tw.tween_property(mailbox_badge, "position:y", -49.0, 0.7).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(mailbox_badge, "position:y", -43.0, 0.7).set_trans(Tween.TRANS_SINE)
+
+	world.add_child(body)
+	_update_mailbox_badge()
 
 
-func _add_decor(tex: Texture2D, pos: Vector2, scl: float, collide: Rect2) -> void:
+func _update_mailbox_badge() -> void:
+	if mailbox_badge == null:
+		return
+	var h_count: int = int(mailbox_data.get("hoes", 0))
+	var c_count: int = int(mailbox_data.get("coins", 0))
+	mailbox_badge.visible = (h_count > 0 or c_count > 0)
+
+
+func _add_decor(tex: Texture2D, pos: Vector2, scl: float, collide: Rect2) -> StaticBody2D:
 	var body := StaticBody2D.new()
 	body.position = pos
 	var spr := Sprite2D.new()
@@ -473,48 +538,235 @@ func _add_decor(tex: Texture2D, pos: Vector2, scl: float, collide: Rect2) -> voi
 		col.position = collide.position + collide.size / 2.0
 		body.add_child(col)
 	world.add_child(body)
+	return body
+
+
+func _get_foliage_col_rect(f_name: String) -> Rect2:
+	match f_name:
+		"bush_large":
+			return Rect2(-18, -14, 36, 14)
+		"bush_med", "bush_berry":
+			return Rect2(-12, -12, 24, 12)
+		"bush_small":
+			return Rect2(-10, -10, 20, 10)
+		"tree_stump":
+			return Rect2(-7, -14, 14, 14)
+		"tree_broadleaf":
+			return Rect2(-10, -16, 20, 16)
+		_:
+			return Rect2(-8, -14, 16, 14)
+
+
+func _random_foliage_type(rng: RandomNumberGenerator) -> String:
+	var total_w := 0
+	for item in FOLIAGE_TYPES:
+		total_w += int(item.weight)
+	var r := rng.randi_range(0, total_w - 1)
+	var cur := 0
+	for item in FOLIAGE_TYPES:
+		cur += int(item.weight)
+		if r < cur:
+			return str(item.name)
+	return "tree_oak"
+
+
+func _is_grass_surface(pos: Vector2) -> bool:
+	# 1. Giới hạn biên bản đồ
+	if pos.x < 45.0 or pos.x > WORLD_SIZE.x - 45.0 or pos.y < 50.0 or pos.y > WORLD_SIZE.y - 50.0:
+		return false
+
+	# 2. Toàn bộ mạng lưới đường đi (PATHS) + hành lang an toàn 28px
+	for p in PATHS:
+		if p.grow(28.0).has_point(pos):
+			return false
+
+	# 3. Ruộng nông trại & hàng rào + cổng vào (Tây, Đông, rào Bắc, Nam)
+	var farm_box := Rect2(FARM_ORIGIN.x - 40.0, FARM_ORIGIN.y - 60.0, FARM_TILES.x * 32.0 + 80.0, FARM_TILES.y * 32.0 + 120.0)
+	if farm_box.has_point(pos):
+		return false
+
+	# 4. Nhà gỗ & hiên nhà
+	var house_box := Rect2(HOUSE_POS.x - 90.0, HOUSE_POS.y - 155.0, 185.0, 180.0)
+	if house_box.has_point(pos):
+		return false
+
+	# 5. Hòm thư cạnh nhà
+	if pos.distance_to(MAILBOX_POS) < 36.0:
+		return false
+
+	# 6. Bù nhìn rơm
+	if pos.distance_to(SCARECROW_POS) < 32.0:
+		return false
+
+	# 7. Vị trí xuất phát của người chơi
+	if pos.distance_to(PLAYER_START) < 40.0:
+		return false
+
+	# 8. Khu chuồng nuôi gia cầm & lối đi xung quanh
+	var pen_box := Rect2(90.0, 530.0, 320.0, 230.0)
+	if pen_box.has_point(pos):
+		return false
+
+	# 9. Ao nước & toàn bộ bờ ao câu cá
+	if POND_RECT.grow(30.0).has_point(pos):
+		return false
+
+	# 10. Ba quầy hàng chợ quê & khoảng đất mua bán
+	var market_box := Rect2(920.0, 330.0, 500.0, 130.0)
+	if market_box.has_point(pos):
+		return false
+
+	# 11. Các vạt đất trống (dirt patches) tự nhiên trên mặt đất
+	var dirt_patches: Array[Vector4i] = [
+		Vector4i(6, 14, 4, 3), Vector4i(30, 8, 5, 3), Vector4i(46, 10, 4, 3), Vector4i(70, 7, 5, 3),
+		Vector4i(88, 19, 4, 3), Vector4i(82, 36, 5, 4), Vector4i(86, 46, 4, 3), Vector4i(72, 48, 4, 3),
+		Vector4i(34, 55, 5, 3), Vector4i(48, 52, 4, 3), Vector4i(78, 56, 5, 3), Vector4i(6, 42, 4, 3), Vector4i(8, 58, 4, 3),
+	]
+	for dp in dirt_patches:
+		var cx := dp.x * 16.0
+		var cy := dp.y * 16.0
+		var rx := dp.z * 16.0
+		var ry := dp.w * 16.0
+		var dx := (pos.x - cx) / rx
+		var dy := (pos.y - cy) / ry
+		if dx * dx + dy * dy <= 1.0:
+			return false
+
+	return true
+
+
+func _clear_foliage() -> void:
+	for node in foliage_nodes:
+		if is_instance_valid(node):
+			node.queue_free()
+	foliage_nodes.clear()
+	foliage_data.clear()
+
+
+func _spawn_foliage_item(f_name: String, pos: Vector2) -> StaticBody2D:
+	var tex := TextureGen.get_tex(f_name)
+	if tex == null:
+		return null
+	var col_rect := _get_foliage_col_rect(f_name)
+	var body: StaticBody2D = _add_decor(tex, pos, 1.0, col_rect)
+	foliage_nodes.append(body)
+	foliage_data.append({"type": f_name, "x": pos.x, "y": pos.y})
+	return body
+
+
+func _populate_random_foliage(target_count: int = 75, seed_val: int = 0) -> void:
+	_clear_foliage()
+	var rng := RandomNumberGenerator.new()
+	if seed_val != 0:
+		rng.seed = seed_val
+	else:
+		rng.randomize()
+
+	var attempts := 0
+	var max_attempts := 3500
+	var min_dist := 48.0
+
+	while foliage_data.size() < target_count and attempts < max_attempts:
+		attempts += 1
+		var x := rng.randf_range(50.0, WORLD_SIZE.x - 50.0)
+		var y := rng.randf_range(55.0, WORLD_SIZE.y - 55.0)
+		var pt := Vector2(x, y)
+
+		if not _is_grass_surface(pt):
+			continue
+
+		var too_close := false
+		for d in foliage_data:
+			var ex_pt := Vector2(float(d.x), float(d.y))
+			if pt.distance_to(ex_pt) < min_dist:
+				too_close = true
+				break
+		if too_close:
+			continue
+
+		var f_type := _random_foliage_type(rng)
+		_spawn_foliage_item(f_type, pt)
+
+
+func _load_foliage(saved_items: Array) -> void:
+	_clear_foliage()
+	for item in saved_items:
+		if typeof(item) != TYPE_DICTIONARY:
+			continue
+		var f_type: String = str(item.get("type", "tree_oak"))
+		var px: float = float(item.get("x", 0.0))
+		var py: float = float(item.get("y", 0.0))
+		_spawn_foliage_item(f_type, Vector2(px, py))
+
+
+func _sprout_random_plant() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for _i in 100:
+		var x := rng.randf_range(50.0, WORLD_SIZE.x - 50.0)
+		var y := rng.randf_range(55.0, WORLD_SIZE.y - 55.0)
+		var pt := Vector2(x, y)
+		if not _is_grass_surface(pt):
+			continue
+		var too_close := false
+		for d in foliage_data:
+			var ex_pt := Vector2(float(d.x), float(d.y))
+			if pt.distance_to(ex_pt) < 48.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+		var plant_pool := ["bush_small", "bush_berry", "bush_med", "tree_oak", "tree_maple", "tree_pine"]
+		var plant_type: String = plant_pool[rng.randi_range(0, plant_pool.size() - 1)]
+		_spawn_foliage_item(plant_type, pt)
+		hud.toast("Một cây xanh vừa mọc tự nhiên trên bãi cỏ qua đêm! 🌱", Color(0.65, 0.95, 0.6))
+		break
 
 
 func _build_fences() -> void:
 	var fh: Texture2D = TextureGen.get_tex("fence_h")
 	var fv: Texture2D = TextureGen.get_tex("fence_v")
-	var fc: Texture2D = TextureGen.get_tex("fence_corner")
-	var y_top := int(FARM_ORIGIN.y - 8)
-	var y_bot := int(FARM_ORIGIN.y + FARM_TILES.y * 32 + 4)
-	var x_left := int(FARM_ORIGIN.x - 12)
-	var x_right := int(FARM_ORIGIN.x + FARM_TILES.x * 32 + 12)
+	var y_top := 370
+	var y_bot := 672
+	var x_left := 408
+	var x_right := 888
 
-	# 1. Hàng ngang trên + dưới liền kín
-	for x in range(int(FARM_ORIGIN.x) + 16, int(FARM_ORIGIN.x + FARM_TILES.x * 32) - 15, 32):
+	# 1. Hàng ngang trên + dưới liền kín (14 sprite 32px nối liền kín khít từ cọc góc này sang cọc góc kia)
+	for x in range(440, 857, 32):
 		_add_sprite(fh, Vector2(x, y_top))
 		_add_sprite(fh, Vector2(x, y_bot))
 
-	# 2. Hai cột dọc — Tây và Đông chừa cửa đi qua
-	var door_w1 := FARM_ORIGIN.y + 2 * 32
-	var door_w2 := FARM_ORIGIN.y + 4 * 32
-	for y in range(y_top + 16, y_bot, 32):
-		if y > door_w1 and y < door_w2:
-			continue
+	# 2. Hai cột dọc — Tây và Đông chừa cửa đi qua ở đại lộ (tâm 472), rào nối khít vào cổng không khe hở
+	for y in [398, 430, 514, 546, 578, 610, 642]:
 		_add_sprite(fv, Vector2(x_left, y))
 		_add_sprite(fv, Vector2(x_right, y))
 
-	# 3. Bốn cọc góc vững chãi cho hàng rào ruộng
-	_add_sprite(fc, Vector2(x_left, y_top))
-	_add_sprite(fc, Vector2(x_right, y_top))
-	_add_sprite(fc, Vector2(x_left, y_bot))
-	_add_sprite(fc, Vector2(x_right, y_bot))
+	# 3. Bốn cọc góc vững chãi cho hàng rào ruộng ngay rìa ngoài đất trồng
+	_add_sprite(TextureGen.get_tex("fence_corner_tl"), Vector2(x_left, y_top))
+	_add_sprite(TextureGen.get_tex("fence_corner_tr"), Vector2(x_right, y_top))
+	_add_sprite(TextureGen.get_tex("fence_corner_bl"), Vector2(x_left, y_bot))
+	_add_sprite(TextureGen.get_tex("fence_corner_br"), Vector2(x_right, y_bot))
 
-	# Va chạm: tây/đông mở cửa giữa, nam/bắc liền kín
-	_wall(Vector2(FARM_ORIGIN.x + FARM_TILES.x * 16, y_top), Vector2(FARM_TILES.x * 32, 10))
-	_wall(Vector2(FARM_ORIGIN.x + FARM_TILES.x * 16, y_bot), Vector2(FARM_TILES.x * 32, 10))
-	_wall(Vector2(x_left, (y_top - 6 + door_w1) / 2.0), Vector2(10, door_w1 - y_top + 6))
-	_wall(Vector2(x_left, (door_w2 + y_bot + 8) / 2.0), Vector2(10, y_bot + 8 - door_w2))
-	_wall(Vector2(x_right, (y_top - 6 + door_w1) / 2.0), Vector2(10, door_w1 - y_top + 6))
-	_wall(Vector2(x_right, (door_w2 + y_bot + 8) / 2.0), Vector2(10, y_bot + 8 - door_w2))
+	# Va chạm: tây/đông mở cửa giữa (y: 440..504), nam/bắc liền kín
+	var door_y1 := 440
+	var door_y2 := 504
+	var farm_mid_x := (x_left + x_right) / 2.0  # 648.0
+	var farm_width := float(x_right - x_left)   # 480.0
+	_wall(Vector2(farm_mid_x, y_top), Vector2(farm_width, 10))
+	_wall(Vector2(farm_mid_x, y_bot), Vector2(farm_width, 10))
+	_wall(Vector2(x_left, (y_top - 6 + door_y1) / 2.0), Vector2(10, door_y1 - y_top + 6))
+	_wall(Vector2(x_left, (door_y2 + y_bot + 8) / 2.0), Vector2(10, y_bot + 8 - door_y2))
+	_wall(Vector2(x_right, (y_top - 6 + door_y1) / 2.0), Vector2(10, door_y1 - y_top + 6))
+	_wall(Vector2(x_right, (door_y2 + y_bot + 8) / 2.0), Vector2(10, y_bot + 8 - door_y2))
 
 	# 4. Hai khung cổng DỌC nghệ thuật tại cửa Tây & Đông
-	for door_x in [x_left, x_right]:
-		_add_sprite(TextureGen.get_tex("gate_v"), Vector2(door_x, (door_w1 + door_w2) / 2.0))
+	var door_mid := 472.0
+	_add_sprite(TextureGen.get_tex("gate_v"), Vector2(x_left, door_mid))
+	var s_right := Sprite2D.new()
+	s_right.texture = TextureGen.get_tex("gate_v")
+	s_right.position = Vector2(x_right, door_mid)
+	s_right.flip_h = true
+	world.add_child(s_right)
 
 
 func _add_sprite(tex: Texture2D, pos: Vector2, parent: Node = null) -> void:
@@ -556,6 +808,10 @@ func _build_ui() -> void:
 	add_child(poultry_shop)
 	inv_panel = InventoryPanelScript.new()
 	add_child(inv_panel)
+	mailbox_panel = MailboxPanelScript.new()
+	add_child(mailbox_panel)
+	mailbox_panel.closed.connect(_close_panels)
+	mailbox_panel.changed.connect(_on_mailbox_changed)
 	pause_menu = PauseMenuScript.new()
 	add_child(pause_menu)
 	dialog_box = DialogueBoxScript.new()
@@ -642,6 +898,13 @@ func _update_hint_and_highlight() -> void:
 				lbl = "Chuồng gia cầm (%d con đang lớn) 🌾" % Inventory.animals.size()
 			else:
 				lbl = "Chuồng gia cầm (Gặp Cô Tư mua giống)"
+		elif near.pos == MAILBOX_POS:
+			var h_count: int = int(mailbox_data.get("hoes", 0))
+			var c_count: int = int(mailbox_data.get("coins", 0))
+			if h_count > 0 or c_count > 0:
+				lbl = "Mở hòm thư 📬 (Có quà: %d cuốc, %d xu)" % [h_count, c_count]
+			else:
+				lbl = "Mở hòm thư 📬 (Trống)"
 		hud.set_hint("E: " + lbl)
 		return
 	var tile = farm.tile_at_world(player.get_facing_point())
@@ -674,13 +937,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_tree().paused = true
 		elif pause_menu.visible:
 			_resume_from_pause()
-		elif shop_panel.visible or inv_panel.visible:
+		elif shop_panel.visible or inv_panel.visible or fish_shop.visible or poultry_shop.visible or (mailbox_panel != null and mailbox_panel.visible):
 			_close_panels()
 	elif event.is_action_pressed("interact"):
 		if mode == Mode.PLAY and not get_tree().paused:
 			_do_interact()
 		elif mode == Mode.DIALOG:
 			dialog_box.advance()
+		elif mailbox_panel != null and mailbox_panel.visible:
+			_close_panels()
 	elif event.is_action_pressed("inventory"):
 		if mode == Mode.PLAY and not get_tree().paused:
 			_open_inventory()
@@ -823,11 +1088,25 @@ func _open_inventory() -> void:
 	inv_panel.open()
 
 
+func _open_mailbox() -> void:
+	mode = Mode.PANEL
+	get_tree().paused = true
+	mailbox_panel.open(mailbox_data)
+
+
+func _on_mailbox_changed() -> void:
+	_update_mailbox_badge()
+	hud.rebuild_hotbar()
+	SaveSystem.save_game(farm.get_state(), player.position, _npc_met, mailbox_data, foliage_data)
+
+
 func _close_panels() -> void:
 	shop_panel.visible = false
 	fish_shop.visible = false
 	poultry_shop.visible = false
 	inv_panel.visible = false
+	if mailbox_panel != null:
+		mailbox_panel.visible = false
 	pause_menu.visible = false
 	get_tree().paused = false
 	if mode != Mode.TITLE:
@@ -842,12 +1121,12 @@ func _resume_from_pause() -> void:
 
 
 func _save_now() -> void:
-	SaveSystem.save_game(farm.get_state(), player.position, _npc_met)
+	SaveSystem.save_game(farm.get_state(), player.position, _npc_met, mailbox_data, foliage_data)
 	hud.toast("Đã lưu game!", Color(0.6, 1.0, 0.6))
 
 
 func _back_to_title() -> void:
-	SaveSystem.save_game(farm.get_state(), player.position, _npc_met)
+	SaveSystem.save_game(farm.get_state(), player.position, _npc_met, mailbox_data, foliage_data)
 	_close_panels()
 	mode = Mode.TITLE
 	dialog_box.force_close()
@@ -879,7 +1158,10 @@ func _do_sleep(forced: bool) -> void:
 	await tw.finished
 	GameState.sleep_to_morning()
 	var ready_n: int = farm.ready_count()
-	SaveSystem.save_game(farm.get_state(), player.position, _npc_met)
+	# Cây cối tự nhiên có tỉ lệ mọc thêm trên bề mặt cỏ qua đêm
+	if foliage_nodes.size() < 95 and randf() < 0.60:
+		_sprout_random_plant()
+	SaveSystem.save_game(farm.get_state(), player.position, _npc_met, mailbox_data, foliage_data)
 	hud.set_clock(GameState.clock_text())
 	canvas_mod.color = _tint()
 	if forced:
@@ -957,11 +1239,14 @@ func start_new_game() -> void:
 	Inventory.selected_seed = "rice"
 	Inventory.add_hoes(2)
 	Inventory.add_seed("rice", 2)
+	mailbox_data = {"hoes": 999, "coins": 999}
+	_update_mailbox_badge()
 	farm.reset_all()
 	player.position = PLAYER_START
 	player.facing = Vector2.DOWN
 	cam.reset_smoothing()
 	_npc_met = false
+	_populate_random_foliage(75)
 	dialog_box.force_close()
 	title_screen.hide_me()
 	get_tree().paused = false
@@ -994,6 +1279,15 @@ func continue_game() -> void:
 		"coops": d.get("coops", {}),
 		"animals": d.get("animals", []),
 	})
+	var mb_dict = d.get("mailbox", null)
+	if typeof(mb_dict) == TYPE_DICTIONARY and not mb_dict.is_empty():
+		mailbox_data = {
+			"hoes": int(mb_dict.get("hoes", 0)),
+			"coins": int(mb_dict.get("coins", 0)),
+		}
+	else:
+		mailbox_data = {"hoes": 999, "coins": 999}
+	_update_mailbox_badge()
 	var farm_arr = d.get("farm", [])
 	if typeof(farm_arr) == TYPE_ARRAY:
 		farm.apply_state(farm_arr)
@@ -1001,6 +1295,11 @@ func continue_game() -> void:
 	player.position = Vector2(float(pp[0]), float(pp[1]))
 	cam.reset_smoothing()
 	_npc_met = bool(d.get("npc_met", true))
+	var f_arr = d.get("foliage", [])
+	if typeof(f_arr) == TYPE_ARRAY and f_arr.size() > 0:
+		_load_foliage(f_arr)
+	elif foliage_data.is_empty():
+		_populate_random_foliage(75)
 	title_screen.hide_me()
 	get_tree().paused = false
 	mode = Mode.PLAY
@@ -1061,7 +1360,7 @@ func _debug_step() -> void:
 		285:
 			_shot("9_house")
 		290:
-			player.position = Vector2(1030, 400)
+			player.position = Vector2(1030, 460)
 		330:
 			_shot("10_stand")
 		335:
@@ -1117,7 +1416,7 @@ func _debug_step() -> void:
 			print("MINIMAP after_cancel=", minimap.guide_dest == "")
 		540:
 			minimap._on_poi_clicked("batu")
-			player.position = Vector2(1180, 415)
+			player.position = Vector2(1180, 430)
 		580:
 			print("MINIMAP arrival_cleared=", minimap.guide_dest == "")
 			_debug_done()
@@ -1230,7 +1529,7 @@ func _debug_grow() -> void:
 	print("POULTRY thu sau 95s = ", got, " trứng gà (kỳ vọng 2)")
 	print("POULTRY ready_left=", Inventory.ready_products())
 	print("POULTRY produce trung_ga=", Inventory.produce_count("trung_ga"))
-	SaveSystem.save_game(farm.get_state(), player.position, true)
+	SaveSystem.save_game(farm.get_state(), player.position, true, mailbox_data, foliage_data)
 	var d := SaveSystem.load_data()
 	print("DEBUG save/load farm tiles = ", (d.get("farm", []) as Array).size(),
 			" hoes=", int(d.get("hoes", -1)), " rods=", d.get("rods", {}),
@@ -1292,7 +1591,7 @@ func _clicktest_step() -> void:
 			_shot("auto_clicktest")
 		140:
 			# cửa NAM đã bị xoá: đi lên phải bị chặn
-			player.position = Vector2(644, 725)
+			player.position = Vector2(648, 725)
 			player.facing = Vector2.UP
 			cam.reset_smoothing()
 			Input.action_press("move_up")
@@ -1302,7 +1601,7 @@ func _clicktest_step() -> void:
 					" (kỳ vọng y > 685: cửa nam đã xoá, bị chặn)")
 		245:
 			# cửa TÂY: đi phải xuyên qua cửa vào ruộng
-			player.position = Vector2(350, 470)
+			player.position = Vector2(350, 472)
 			player.facing = Vector2.RIGHT
 			cam.reset_smoothing()
 			Input.action_press("move_right")
@@ -1318,7 +1617,7 @@ func _clicktest_step() -> void:
 			print("ETEST tile_tstate=", (t.tstate if t != null else -1), " (kỳ vọng 1=TILLED)")
 		445:
 			# cửa ĐÔNG: đi trái xuyên qua cửa vào ruộng
-			player.position = Vector2(960, 470)
+			player.position = Vector2(960, 472)
 			player.facing = Vector2.LEFT
 			cam.reset_smoothing()
 			Input.action_press("move_left")
@@ -1354,15 +1653,88 @@ func _clicktest_step() -> void:
 					" (kỳ vọng x < 200: bị rào tây chặn)")
 		910:
 			# rào bắc ruộng: đi xuống bị chặn
-			player.position = Vector2(644, 330)
+			player.position = Vector2(648, 330)
 			Input.action_press("move_down")
 		985:
 			Input.action_release("move_down")
 			print("FARMTOP player=", player.position,
 					" (kỳ vọng y < 400: bị rào bắc ruộng chặn)")
+		988:
+			# test hòm thư bên cạnh nhà: kiểm tra sẵn 999 cuốc và 999 xu
+			player.position = MAILBOX_POS + Vector2(0, 15)
+			var near_mb: Dictionary = _nearest_interactable()
+			var is_near_mb: bool = not near_mb.is_empty() and (Vector2(near_mb.get("pos", Vector2.ZERO)) == MAILBOX_POS)
+			var mb_hoes_before: int = int(mailbox_data.get("hoes", 0))
+			var mb_coins_before: int = int(mailbox_data.get("coins", 0))
+			_open_mailbox()
+			var opened_ok: bool = mailbox_panel.visible
+			mailbox_panel._claim_all()
+			var claimed_hoes: bool = Inventory.hoes >= 999
+			var claimed_coins: bool = GameState.money >= 999
+			var mb_empty: bool = int(mailbox_data.get("hoes", -1)) == 0 and int(mailbox_data.get("coins", -1)) == 0
+			_close_panels()
+			var closed_ok: bool = not mailbox_panel.visible
+			print("MAILBOXTEST near=", is_near_mb, " before=(", mb_hoes_before, ",", mb_coins_before,
+					") opened=", opened_ok, " claimed=(", claimed_hoes, ",", claimed_coins,
+					") empty=", mb_empty, " closed=", closed_ok)
+		989:
+			# test không tưới được khi chưa trồng hạt giống & kiểm tra texture cây trồng Stardew Valley
+			var test_tile = farm.tiles[Vector2i(6, 6)]
+			test_tile.reset_tile()
+			test_tile.till()
+			# Chưa trồng -> hành động tưới phải bị chặn
+			var tilled_action: Dictionary = farm.action_at(test_tile)
+			var can_water_unplanted: bool = str(tilled_action.get("act", "")) == "water"
+			test_tile.water()
+			var watered_unplanted: bool = test_tile.watered
+			# Gieo hạt -> cho phép tưới
+			Inventory.add_seed("rice", 1)
+			Inventory.selected_seed = "rice"
+			test_tile.plant("rice")
+			var planted_action: Dictionary = farm.action_at(test_tile)
+			var can_water_planted: bool = str(planted_action.get("act", "")) == "water"
+			test_tile.water()
+			var watered_planted: bool = test_tile.watered
+			# Kiểm tra texture SDV mầm -> lớn
+			var c_rice := CropDB.get_crop("rice")
+			var tex_stage0 := TextureGen.crop_tex(c_rice, 0)
+			var tex_stage4 := TextureGen.crop_tex(c_rice, 4)
+			var tex_seed := TextureGen.seed_icon(c_rice)
+			var tex_prod := TextureGen.prod_icon(c_rice)
+			var assets_ok: bool = (tex_stage0 != null and tex_stage4 != null and tex_seed != null and tex_prod != null)
+			print("CROGTEST water_unplanted=(action:", can_water_unplanted, ", wet:", watered_unplanted,
+					") water_planted=(action:", can_water_planted, ", wet:", watered_planted,
+					") sdv_assets=", assets_ok)
+			test_tile.reset_tile()
 		990:
+			# test 3 quán bên cạnh đường mòn to và tương tác trực tiếp từ đại lộ
+			player.position = Vector2(1010, 460)
+			var near_tu: Dictionary = _nearest_interactable()
+			player.position = Vector2(1180, 460)
+			var near_batu: Dictionary = _nearest_interactable()
+			player.position = Vector2(1350, 460)
+			var near_hai: Dictionary = _nearest_interactable()
+			var stands_on_road: bool = (near_tu.get("pos") == COTU_POS) and (near_batu.get("pos") == NPC_POS) and (near_hai.get("pos") == CHU_HAI_POS)
+			print("STANDTEST roadside_accessible=", stands_on_road,
+					" cotu_pos=", COTU_POS, " batu_pos=", NPC_POS, " hai_pos=", CHU_HAI_POS)
+		992:
+			# test cây cối mọc ngẫu nhiên trên bề mặt cỏ & mọc thêm qua đêm
+			var f_count: int = foliage_data.size()
+			var all_grass: bool = true
+			for fd in foliage_data:
+				if not _is_grass_surface(Vector2(float(fd.x), float(fd.y))):
+					all_grass = false
+					break
+			_sprout_random_plant()
+			var count_after_sprout: int = foliage_data.size()
+			SaveSystem.save_game(farm.get_state(), player.position, true, mailbox_data, foliage_data)
+			var sd: Dictionary = SaveSystem.load_data()
+			var saved_f_size: int = (sd.get("foliage", []) as Array).size()
+			print("FOLIAGETEST initial=", f_count, " all_on_grass=", all_grass,
+					" sprouted=", (count_after_sprout == f_count + 1),
+					" saved_and_loaded=", (saved_f_size == count_after_sprout))
+		995:
 			print("CLICKTEST_DONE")
-			get_tree().quit()
 			get_tree().quit()
 
 

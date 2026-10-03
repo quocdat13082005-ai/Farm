@@ -63,15 +63,51 @@ static func get_tex(key: String) -> ImageTexture:
 		"field":
 			tex = _field()
 		"tilled":
-			tex = _tilled(false)
+			tex = _tilled_variant("isolated", false)
 		"tilled_wet":
-			tex = _tilled(true)
+			tex = _tilled_variant("isolated", true)
+		"tilled_isolated":
+			tex = _tilled_variant("isolated", false)
+		"tilled_left":
+			tex = _tilled_variant("left", false)
+		"tilled_mid":
+			tex = _tilled_variant("mid", false)
+		"tilled_right":
+			tex = _tilled_variant("right", false)
+		"tilled_wet_isolated":
+			tex = _tilled_variant("isolated", true)
+		"tilled_wet_left":
+			tex = _tilled_variant("left", true)
+		"tilled_wet_mid":
+			tex = _tilled_variant("mid", true)
+		"tilled_wet_right":
+			tex = _tilled_variant("right", true)
 		"highlight":
 			tex = _highlight()
 		"tree":
 			tex = _tree()
+		"tree_oak":
+			tex = _tree_variant("tree_oak")
+		"tree_maple":
+			tex = _tree_variant("tree_maple")
+		"tree_pine":
+			tex = _tree_variant("tree_pine")
+		"tree_broadleaf":
+			tex = _tree_variant("tree_broadleaf")
+		"bush_large":
+			tex = _tree_variant("bush_large")
+		"bush_med":
+			tex = _tree_variant("bush_med")
+		"bush_small":
+			tex = _tree_variant("bush_small")
+		"bush_berry":
+			tex = _tree_variant("bush_berry")
+		"tree_stump":
+			tex = _tree_variant("tree_stump")
 		"house":
 			tex = _house()
+		"mailbox":
+			tex = _mailbox()
 		"stand":
 			tex = _stand()
 		"scarecrow":
@@ -94,6 +130,14 @@ static func get_tex(key: String) -> ImageTexture:
 			tex = _fence_v()
 		"fence_corner":
 			tex = _fence_corner()
+		"fence_corner_tl":
+			tex = _fence_corner_dir("tl")
+		"fence_corner_tr":
+			tex = _fence_corner_dir("tr")
+		"fence_corner_bl":
+			tex = _fence_corner_dir("bl")
+		"fence_corner_br":
+			tex = _fence_corner_dir("br")
 		"gate":
 			tex = _gate()
 		"gate_v":
@@ -137,6 +181,82 @@ static func get_tex(key: String) -> ImageTexture:
 
 # ---------- nền đất (bake 1 ảnh lớn) ----------
 
+static func _autotile_terrain(img: Image, atlas: Image, grid: Array, gw: int, gh: int, is_dirt: bool, rng: RandomNumberGenerator) -> void:
+	for gy in range(gh):
+		for gx in range(gw):
+			if not grid[gy][gx]:
+				continue
+			var n: bool = grid[gy - 1][gx] if gy > 0 else false
+			var s: bool = grid[gy + 1][gx] if gy < gh - 1 else false
+			var w_val: bool = grid[gy][gx - 1] if gx > 0 else false
+			var e: bool = grid[gy][gx + 1] if gx < gw - 1 else false
+
+			# Mở thông tại các vị trí cổng kết nối với đường đi (không bị chặn cỏ)
+			if is_dirt:
+				if gx == 25 and (gy >= 28 and gy <= 30):
+					w_val = true # Cổng Tây ruộng nối đại lộ
+				elif gx == 54 and (gy >= 28 and gy <= 30):
+					e = true # Cổng Đông ruộng nối đại lộ
+				elif (gx == 18 or gx == 19) and gy == 35:
+					n = true # Cổng chuồng nối lối đi từ bắc
+
+			var nw: bool = grid[gy - 1][gx - 1] if gy > 0 and gx > 0 else false
+			var ne: bool = grid[gy - 1][gx + 1] if gy > 0 and gx < gw - 1 else false
+			var sw: bool = grid[gy + 1][gx - 1] if gy < gh - 1 and gx > 0 else false
+			var se: bool = grid[gy + 1][gx + 1] if gy < gh - 1 and gx < gw - 1 else false
+
+			var tile_idx: int = 4
+			# Góc lồi bo tròn ngoài (Outer convex corners)
+			if not n and not w_val and s and e:
+				tile_idx = 0
+			elif not n and not e and s and w_val:
+				tile_idx = 2
+			elif not s and not w_val and n and e:
+				tile_idx = 6
+			elif not s and not e and n and w_val:
+				tile_idx = 8
+			# Mép thẳng (Straight edges)
+			elif not n and s:
+				tile_idx = 1
+			elif not s and n:
+				tile_idx = 7
+			elif not w_val and e:
+				tile_idx = 3
+			elif not e and w_val:
+				tile_idx = 5
+			# Lòng trong & góc lõm nối ngã ba / ngã tư (Inner Concave Corners)
+			else:
+				if not nw and ne and sw and se:
+					tile_idx = 9
+				elif not ne and nw and sw and se:
+					tile_idx = 10
+				elif not sw and nw and ne and se:
+					tile_idx = 11
+				elif not se and nw and ne and sw:
+					tile_idx = 12
+				else:
+					if is_dirt:
+						var r := rng.randf()
+						if r < 0.08:
+							tile_idx = 13 # viên sỏi (pebbles)
+						elif r < 0.15:
+							tile_idx = 14 # vết lõm (crater)
+						elif r < 0.20:
+							tile_idx = 15 # bụi cỏ nhỏ trên đất (weed tuft)
+						else:
+							tile_idx = 4
+					else:
+						var r := rng.randf()
+						if r < 0.12:
+							tile_idx = 15 # cỏ 4 lá (clover)
+						else:
+							tile_idx = 4
+
+			var col: int = tile_idx % 8
+			var row: int = tile_idx / 8
+			img.blit_rect(atlas, Rect2i(col * 16, row * 16, 16, 16), Vector2i(gx * 16, gy * 16))
+
+
 static func make_ground(w: int, h: int, farm_rect: Rect2, paths: Array, pond: Rect2) -> ImageTexture:
 	var key := "ground"
 	if _cache.has(key):
@@ -144,74 +264,285 @@ static func make_ground(w: int, h: int, farm_rect: Rect2, paths: Array, pond: Re
 	var img := _img(w, h)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20260101
-	img.fill(Color(0.45, 0.66, 0.31))
-	# mảng cỏ đậm nhạt theo khối
-	for by in range(0, h, 64):
-		for bx in range(0, w, 64):
-			var r := rng.randf()
-			if r < 0.35:
-				img.fill_rect(Rect2i(bx, by, 64, 64), Color(0.43, 0.64, 0.30))
-			elif r < 0.6:
-				img.fill_rect(Rect2i(bx, by, 64, 64), Color(0.47, 0.68, 0.33))
-	# vết cỏ nhỏ
-	for i in 26000:
-		var x := rng.randi_range(0, w - 1)
-		var y := rng.randi_range(0, h - 1)
-		if rng.randf() < 0.5:
-			px(img, x, y, Color(0.38, 0.58, 0.26))
-		else:
-			px(img, x, y, Color(0.53, 0.73, 0.37))
-	# viền quanh khu nông trại
-	var fr := Rect2i(int(farm_rect.position.x) - 3, int(farm_rect.position.y) - 3,
-			int(farm_rect.size.x) + 6, int(farm_rect.size.y) + 6)
-	img.fill_rect(Rect2i(fr.position, Vector2i(fr.size.x, 3)), Color(0.62, 0.52, 0.33))
-	img.fill_rect(Rect2i(Vector2i(fr.position.x, fr.position.y + fr.size.y - 3), Vector2i(fr.size.x, 3)), Color(0.62, 0.52, 0.33))
-	img.fill_rect(Rect2i(fr.position, Vector2i(3, fr.size.y)), Color(0.62, 0.52, 0.33))
-	img.fill_rect(Rect2i(Vector2i(fr.position.x + fr.size.x - 3, fr.position.y), Vector2i(3, fr.size.y)), Color(0.62, 0.52, 0.33))
-	# đường đi đất
-	for p in paths:
-		img.fill_rect(Rect2i(p), Color(0.80, 0.70, 0.48))
-		for i in int(p.size.x * p.size.y / 60.0):
-			var x := rng.randi_range(int(p.position.x), int(p.position.x + p.size.x) - 1)
-			var y := rng.randi_range(int(p.position.y), int(p.position.y + p.size.y) - 1)
+	var grass_tiles := _load_picture("res://picture/sdv_grass.png")
+	if grass_tiles != null:
+		# Lát mặt cỏ Stardew Valley chuẩn tỉ lệ và phân bổ tự nhiên
+		for ty in range(0, h, 16):
+			for tx in range(0, w, 16):
+				var r := rng.randf()
+				var tile_idx: int = rng.randi_range(0, 1) if r < 0.85 else rng.randi_range(2, 8)
+				img.blit_rect(grass_tiles, Rect2i(tile_idx * 16, 0, 16, 16), Vector2i(tx, ty))
+	else:
+		img.fill(Color(0.294, 0.647, 0.114))
+		for by in range(0, h, 64):
+			for bx in range(0, w, 64):
+				var r := rng.randf()
+				if r < 0.35:
+					img.fill_rect(Rect2i(bx, by, 64, 64), Color(0.27, 0.60, 0.10))
+				elif r < 0.6:
+					img.fill_rect(Rect2i(bx, by, 64, 64), Color(0.32, 0.68, 0.13))
+		for i in 26000:
+			var x := rng.randi_range(0, w - 1)
+			var y := rng.randi_range(0, h - 1)
 			if rng.randf() < 0.5:
-				px(img, x, y, Color(0.72, 0.62, 0.42))
+				px(img, x, y, Color(0.25, 0.55, 0.09))
 			else:
-				px(img, x, y, Color(0.88, 0.79, 0.58))
-	# viền đất sẫm quanh toàn mạng lối đi (vẽ sau khi gộp hết để không hở ở chỗ các đường nối nhau)
-	var road_mask := Image.create(w, h, false, Image.FORMAT_L8)
+				px(img, x, y, Color(0.35, 0.72, 0.15))
+
+	var gw: int = int(ceil(float(w) / 16.0))
+	var gh: int = int(ceil(float(h) / 16.0))
+
+	# 1. Mặt nạ khu vực được bảo vệ (không đặt mảng cỏ đậm hay vạt đất trống)
+	var protected: Array = []
+	for y in gh:
+		var row: Array = []
+		row.resize(gw)
+		row.fill(false)
+		protected.append(row)
+
+	var protect_rect = func(rx: float, ry: float, rw: float, rh: float, pad: int = 1) -> void:
+		var tx0: int = maxi(0, int(floor(rx / 16.0)) - pad)
+		var tx1: int = mini(gw, int(ceil((rx + rw) / 16.0)) + pad)
+		var ty0: int = maxi(0, int(floor(ry / 16.0)) - pad)
+		var ty1: int = mini(gh, int(ceil((ry + rh) / 16.0)) + pad)
+		for py in range(ty0, ty1):
+			for px in range(tx0, tx1):
+				protected[py][px] = true
+
+	# Bảo vệ các công trình, ruộng đồng, chuồng trại, khu chợ, ao hồ và đường đi
+	protect_rect.call(farm_rect.position.x, farm_rect.position.y, farm_rect.size.x, farm_rect.size.y, 2)
+	protect_rect.call(241.0 - 72.0, 248.0 - 144.0, 160.0, 160.0, 2) # Nhà gỗ & hiên
+	protect_rect.call(120.0, 560.0, 272.0, 220.0, 2) # Chuồng gia cầm
+	protect_rect.call(944.0, 352.0, 464.0, 96.0, 2) # Khu chợ quê
+	protect_rect.call(pond.position.x, pond.position.y, pond.size.x, pond.size.y, 3) # Hồ nước
 	for p in paths:
-		road_mask.fill_rect(Rect2i(p), Color.WHITE)
-	for p in paths:
-		var er := Rect2i(int(p.position.x) - 1, int(p.position.y) - 1, int(p.size.x) + 2, int(p.size.y) + 2)
-		for ey in range(maxi(er.position.y, 0), mini(er.end.y, h)):
-			for ex in range(maxi(er.position.x, 0), mini(er.end.x, w)):
-				if _mask_on(road_mask, ex, ey) and not (_mask_on(road_mask, ex - 1, ey)
-						and _mask_on(road_mask, ex + 1, ey) and _mask_on(road_mask, ex, ey - 1)
-						and _mask_on(road_mask, ex, ey + 1)):
-					px(img, ex, ey, Color(0.60, 0.50, 0.31))
-	# Khuôn viên chợ quê phía sau (nền gạch đá cho 3 quầy hàng)
-	var plaza := Rect2i(950, 318, 480, 84)
-	img.fill_rect(plaza, Color(0.74, 0.64, 0.44))
-	for my in range(320, 400, 10):
-		for mx in range(952, 1426, 14):
-			var tile_c := Color(0.82, 0.72, 0.52) if (mx / 14 + my / 10) % 2 == 0 else Color(0.78, 0.68, 0.48)
-			img.fill_rect(Rect2i(mx, my, 13, 9), tile_c)
-			for gx in range(mx, mx + 13):
-				px(img, gx, my + 9, Color(0.64, 0.54, 0.36))
-			for gy in range(my, my + 9):
-				px(img, mx + 13, gy, Color(0.64, 0.54, 0.36))
-	# ao nước
+		protect_rect.call(p.position.x, p.position.y, p.size.x, p.size.y, 2)
+
+	# 2. Vùng cỏ xanh đậm tự nhiên (Dark green grass clusters)
+	var dark_atlas := _load_picture("res://picture/sdv_dark_grass_tiles.png")
+	var dark_grid: Array = []
+	for y in gh:
+		var row: Array = []
+		row.resize(gw)
+		row.fill(false)
+		dark_grid.append(row)
+
+	var dark_clusters: Array[Vector4i] = [
+		Vector4i(8, 8, 7, 5), Vector4i(22, 6, 8, 5), Vector4i(40, 8, 9, 6), Vector4i(52, 7, 8, 5),
+		Vector4i(75, 8, 10, 6), Vector4i(88, 12, 6, 6), Vector4i(80, 40, 8, 6), Vector4i(88, 52, 6, 6),
+		Vector4i(70, 55, 9, 6), Vector4i(38, 52, 10, 6), Vector4i(50, 54, 9, 5), Vector4i(8, 48, 7, 6),
+	]
+	for cl in dark_clusters:
+		var cx: int = cl.x
+		var cy: int = cl.y
+		var rx: int = cl.z
+		var ry: int = cl.w
+		for gy in range(maxi(0, cy - ry), mini(gh, cy + ry + 1)):
+			for gx in range(maxi(0, cx - rx), mini(gw, cx + rx + 1)):
+				if protected[gy][gx]:
+					continue
+				var dx := float(gx - cx) / float(rx)
+				var dy := float(gy - cy) / float(ry)
+				var noise := (sin(gx * 1.7 + gy * 2.3) + cos(gx * 0.9 - gy * 1.5)) * 0.15
+				if dx * dx + dy * dy + noise <= 1.0:
+					dark_grid[gy][gx] = true
+
+	# 3. Các khoảng đất trống ngẫu nhiên (Bare ground clearings / dirt patches)
+	var dirt_atlas := _load_picture("res://picture/sdv_dirt_patch_tiles.png")
+	var dirt_grid: Array = []
+	for y in gh:
+		var row: Array = []
+		row.resize(gw)
+		row.fill(false)
+		dirt_grid.append(row)
+
+	var dirt_patches: Array[Vector4i] = [
+		Vector4i(6, 14, 4, 3), Vector4i(30, 8, 5, 3), Vector4i(46, 10, 4, 3), Vector4i(70, 7, 5, 3),
+		Vector4i(88, 19, 4, 3), Vector4i(82, 36, 5, 4), Vector4i(86, 46, 4, 3), Vector4i(72, 48, 4, 3),
+		Vector4i(34, 55, 5, 3), Vector4i(48, 52, 4, 3), Vector4i(78, 56, 5, 3), Vector4i(6, 42, 4, 3), Vector4i(8, 58, 4, 3),
+	]
+	for dp in dirt_patches:
+		var cx: int = dp.x
+		var cy: int = dp.y
+		var rx: int = dp.z
+		var ry: int = dp.w
+		for gy in range(maxi(0, cy - ry), mini(gh, cy + ry + 1)):
+			for gx in range(maxi(0, cx - rx), mini(gw, cx + rx + 1)):
+				if protected[gy][gx]:
+					continue
+				var dx := float(gx - cx) / float(rx)
+				var dy := float(gy - cy) / float(ry)
+				var noise := (sin(gx * 2.1 - gy * 1.8) + cos(gx * 1.3 + gy * 2.5)) * 0.18
+				if dx * dx + dy * dy + noise <= 0.85:
+					dirt_grid[gy][gx] = true
+					dark_grid[gy][gx] = false
+
+	# Làm mịn các vạt đất (smoothing pass: loại bỏ ô đơn độc)
+	for gy in range(1, gh - 1):
+		for gx in range(1, gw - 1):
+			if dirt_grid[gy][gx]:
+				var cnt: int = 0
+				if dirt_grid[gy - 1][gx]: cnt += 1
+				if dirt_grid[gy + 1][gx]: cnt += 1
+				if dirt_grid[gy][gx - 1]: cnt += 1
+				if dirt_grid[gy][gx + 1]: cnt += 1
+				if cnt < 2:
+					dirt_grid[gy][gx] = false
+
+	# 4. Đất nông trại (Farm field) - tự nhiên viền răng cưa Stardew Valley
+	# Ruộng nông trại: x từ 416 đến 880 (gx: 26..54), y từ 384 đến 672 (gy: 24..41)
+	# Đất trồng nằm sát khít ngay rìa trong của hàng rào (x: 408..888, y: 370..672), chân rào cắm trên cỏ
+	var farm_grid: Array = []
+	for y in gh:
+		var row: Array = []
+		row.resize(gw)
+		row.fill(false)
+		farm_grid.append(row)
+
+	for gy in range(24, 42):
+		for gx in range(26, 55):
+			farm_grid[gy][gx] = true
+			dark_grid[gy][gx] = false
+
+	# Chuồng nuôi gia cầm (Animal pen) - nền đất ấm viền cỏ tự nhiên
+	# Căn chuẩn tuyệt đối theo rào chuồng: x từ 112 đến 400 (gx: 7..24), y từ 560 đến 672 (gy: 35..41)
+	var pen_grid: Array = []
+	for y in gh:
+		var row: Array = []
+		row.resize(gw)
+		row.fill(false)
+		pen_grid.append(row)
+
+	for gy in range(35, 42):
+		for gx in range(7, 25):
+			pen_grid[gy][gx] = true
+			dark_grid[gy][gx] = false
+
+	# 5. Lát autotile cho cỏ đậm, các vạt đất trống, đất nông trại và chuồng nuôi
+	if dark_atlas != null:
+		_autotile_terrain(img, dark_atlas, dark_grid, gw, gh, false, rng)
+	if dirt_atlas != null:
+		_autotile_terrain(img, dirt_atlas, dirt_grid, gw, gh, true, rng)
+		_autotile_terrain(img, dirt_atlas, farm_grid, gw, gh, true, rng)
+		_autotile_terrain(img, dirt_atlas, pen_grid, gw, gh, true, rng)
+
+	# 6. Rải hoa dại tự nhiên (wildflowers) trên thảm cỏ
+	if dark_atlas != null:
+		var fl_p_rect := Rect2i(5 * 16, 1 * 16, 16, 16)
+		var fl_b_rect := Rect2i(6 * 16, 1 * 16, 16, 16)
+		for gy in range(gh):
+			for gx in range(gw):
+				if not protected[gy][gx] and not dirt_grid[gy][gx] and not farm_grid[gy][gx] and not pen_grid[gy][gx]:
+					var r := rng.randf()
+					if r < 0.035:
+						var src_rect := fl_p_rect if rng.randf() < 0.5 else fl_b_rect
+						img.blend_rect(dark_atlas, src_rect, Vector2i(gx * 16, gy * 16))
+
+	# ---------------- Hệ thống đường đi đất Stardew Valley chuẩn autotile ----------------
+	var sdv_roads := _load_picture("res://picture/sdv_road_tiles.png")
+	if sdv_roads != null:
+		var road_grid: Array = []
+		for y in gh:
+			var row: Array = []
+			row.resize(gw)
+			row.fill(false)
+			road_grid.append(row)
+
+		for p in paths:
+			var tx0: int = maxi(0, int(floor(p.position.x / 16.0)))
+			var tx1: int = mini(gw, int(ceil(p.end.x / 16.0)))
+			var ty0: int = maxi(0, int(floor(p.position.y / 16.0)))
+			var ty1: int = mini(gh, int(ceil(p.end.y / 16.0)))
+			for ty in range(ty0, ty1):
+				for tx in range(tx0, tx1):
+					# Không đặt đường xuyên qua giữa lòng ruộng nông trại
+					if tx >= 25 and tx <= 55 and ty >= 23 and ty <= 42:
+						continue
+					road_grid[ty][tx] = true
+
+		var top_edges: Array[Vector2i] = [
+			Vector2i(16, 0), Vector2i(16, 0), Vector2i(32, 0),
+			Vector2i(16, 0), Vector2i(48, 0), Vector2i(32, 0)
+		]
+		var dirt_details: Array[Vector2i] = [
+			Vector2i(0, 48), Vector2i(16, 48), Vector2i(16, 48), Vector2i(0, 48),
+			Vector2i(32, 48), Vector2i(48, 48), Vector2i(64, 48), Vector2i(80, 48),
+			Vector2i(0, 48), Vector2i(16, 48)
+		]
+
+		for gy in range(gh):
+			for gx in range(gw):
+				if not road_grid[gy][gx]:
+					continue
+				var n: bool = road_grid[gy - 1][gx] if gy > 0 else false
+				var s: bool = road_grid[gy + 1][gx] if gy < gh - 1 else false
+				var w_val: bool = road_grid[gy][gx - 1] if gx > 0 else false
+				var e: bool = road_grid[gy][gx + 1] if gx < gw - 1 else false
+
+				# Nối thông vào cổng ruộng và cổng chuồng không bị cỏ chắn
+				if gx == 24 and (gy >= 28 and gy <= 31):
+					e = true
+				elif gx == 56 and (gy >= 28 and gy <= 31):
+					w_val = true
+				elif (gx == 18 or gx == 19) and gy == 34:
+					s = true
+
+				var nw: bool = road_grid[gy - 1][gx - 1] if gy > 0 and gx > 0 else false
+				var ne: bool = road_grid[gy - 1][gx + 1] if gy > 0 and gx < gw - 1 else false
+				var sw: bool = road_grid[gy + 1][gx - 1] if gy < gh - 1 and gx > 0 else false
+				var se: bool = road_grid[gy + 1][gx + 1] if gy < gh - 1 and gx < gw - 1 else false
+
+				var src_pos := Vector2i(0, 48)
+
+				# Góc lồi bo tròn ngoài (Outer convex corners)
+				if not n and not w_val and s and e:
+					src_pos = Vector2i(0, 0)    # CONVEX_TL (201)
+				elif not n and not e and s and w_val:
+					src_pos = Vector2i(64, 0)   # CONVEX_TR (204)
+				elif not s and not w_val and n and e:
+					src_pos = Vector2i(0, 32)   # CONVEX_BL (251)
+				elif not s and not e and n and w_val:
+					src_pos = Vector2i(64, 32)  # CONVEX_BR (254)
+				# Mép thẳng (Straight edges)
+				elif not n and s:
+					src_pos = top_edges[rng.randi_range(0, top_edges.size() - 1)]
+				elif not s and n:
+					src_pos = Vector2i(16, 32)  # BOT_EDGE (252)
+				elif not w_val and e:
+					src_pos = Vector2i(0, 16)   # LEFT_EDGE (226)
+				elif not e and w_val:
+					src_pos = Vector2i(16, 16)  # RIGHT_EDGE (229)
+				# Lòng đường & góc lõm nối ngã ba / ngã tư (Inner Concave Corners)
+				else:
+					if not nw and ne and sw and se:
+						src_pos = Vector2i(32, 16) # CONCAVE_TL (203)
+					elif not ne and nw and sw and se:
+						src_pos = Vector2i(80, 0)  # CONCAVE_TR (178)
+					elif not sw and nw and ne and se:
+						src_pos = Vector2i(48, 16) # CONCAVE_BL (253)
+					elif not se and nw and ne and sw:
+						src_pos = Vector2i(64, 16) # CONCAVE_BR (179)
+					else:
+						src_pos = dirt_details[rng.randi_range(0, dirt_details.size() - 1)]
+
+				img.blit_rect(sdv_roads, Rect2i(src_pos, Vector2i(16, 16)), Vector2i(gx * 16, gy * 16))
+
+	# ao nước Stardew Valley chính thống từ Content
 	var pc := pond.get_center()
-	var rx := pond.size.x / 2.0
-	var ry := pond.size.y / 2.0
-	ellipse(img, pc.x, pc.y, rx + 6, ry + 6, Color(0.78, 0.70, 0.48))
-	ellipse(img, pc.x, pc.y, rx, ry, Color(0.30, 0.55, 0.76))
-	ellipse(img, pc.x - rx * 0.15, pc.y - ry * 0.2, rx * 0.62, ry * 0.55, Color(0.42, 0.68, 0.86))
-	for i in 60:
-		var a := rng.randf() * TAU
-		var rr := sqrt(rng.randf())
-		px(img, int(pc.x + cos(a) * rx * 0.8 * rr), int(pc.y + sin(a) * ry * 0.8 * rr), Color(0.75, 0.9, 0.98))
+	var sdv_pond := _load_picture("res://picture/sdv_pond.png")
+	if sdv_pond != null:
+		var pond_pos := Vector2i(int(pc.x - sdv_pond.get_width() / 2.0), int(pc.y - sdv_pond.get_height() / 2.0))
+		img.blend_rect(sdv_pond, Rect2i(0, 0, sdv_pond.get_width(), sdv_pond.get_height()), pond_pos)
+	else:
+		var rx := pond.size.x / 2.0
+		var ry := pond.size.y / 2.0
+		ellipse(img, pc.x, pc.y, rx + 6, ry + 6, Color(0.78, 0.70, 0.48))
+		ellipse(img, pc.x, pc.y, rx, ry, Color(0.30, 0.55, 0.76))
+		ellipse(img, pc.x - rx * 0.15, pc.y - ry * 0.2, rx * 0.62, ry * 0.55, Color(0.42, 0.68, 0.86))
+		for i in 60:
+			var a := rng.randf() * TAU
+			var rr := sqrt(rng.randf())
+			px(img, int(pc.x + cos(a) * rx * 0.8 * rr), int(pc.y + sin(a) * ry * 0.8 * rr), Color(0.75, 0.9, 0.98))
 	var tex := _tex(img)
 	_cache[key] = tex
 	return tex
@@ -219,30 +550,48 @@ static func make_ground(w: int, h: int, farm_rect: Rect2, paths: Array, pond: Re
 
 # ---------- đất canh tác ----------
 
-# Nền ruộng chưa cày: đất nâu nhạt, mịn.
+# Nền ruộng đất không cỏ (chuẩn đất nông trại Stardew Valley)
 static func _field() -> ImageTexture:
+	var sdv_dirt := _load_picture("res://picture/sdv_dirt.png")
+	if sdv_dirt != null:
+		var img := _img(32, 32)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 4242
+		for ty in range(0, 32, 16):
+			for tx in range(0, 32, 16):
+				var r := rng.randf()
+				var d_idx: int = 0
+				if r < 0.55:
+					d_idx = 0
+				elif r < 0.78:
+					d_idx = 1
+				elif r < 0.9:
+					d_idx = 2
+				else:
+					d_idx = 3
+				img.blit_rect(sdv_dirt, Rect2i(d_idx * 16, 0, 16, 16), Vector2i(tx, ty))
+		return _tex(img)
 	var img := _img(32, 32)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4242
-	var base := Color(0.63, 0.48, 0.30)
+	var base := Color(0.85, 0.60, 0.22)
 	img.fill(base)
-	for i in 110:
+	for i in 60:
 		var x := rng.randi_range(0, 31)
 		var y := rng.randi_range(0, 31)
 		if rng.randf() < 0.5:
 			px(img, x, y, base.darkened(0.12))
 		else:
 			px(img, x, y, base.lightened(0.09))
-	for i in 4:
-		px(img, rng.randi_range(2, 29), rng.randi_range(2, 29), Color(0.55, 0.53, 0.5))
-	var edge := base.darkened(0.16)
-	for x in 32:
-		px(img, x, 0, edge)
-		px(img, x, 31, edge)
-	for y in 32:
-		px(img, 0, y, edge)
-		px(img, 31, y, edge)
 	return _tex(img)
+
+
+static func _tilled_variant(type: String, wet: bool) -> ImageTexture:
+	var prefix := "hoe_dirt_wet" if wet else "hoe_dirt"
+	var loaded := _load_picture("res://picture/%s_%s.png" % [prefix, type])
+	if loaded != null:
+		return _tex(loaded)
+	return _tilled(wet)
 
 
 static func _tilled(wet: bool) -> ImageTexture:
@@ -274,6 +623,9 @@ static func _tilled(wet: bool) -> ImageTexture:
 
 # Khung cổng gỗ 64px: Cổng ngõ làng quê với 2 cột trụ vững chãi, đòn dông gỗ và mái che rơm/gỗ
 static func _gate() -> ImageTexture:
+	var loaded := _load_picture("res://picture/gate_coop.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(64, 30)
 	var wood := Color(0.58, 0.40, 0.22)
 	var dark := Color(0.38, 0.24, 0.12)
@@ -324,6 +676,9 @@ static func _gate() -> ImageTexture:
 
 # Khung cổng DỌC 32x64: Cổng rào đồng quê vào ruộng, hai trụ gỗ đá lim, cánh cửa chữ X mở rộng
 static func _gate_v() -> ImageTexture:
+	var loaded := _load_picture("res://picture/gate_v.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(32, 64)
 	var wood_d := Color(0.38, 0.24, 0.12)
 	var wood_m := Color(0.56, 0.38, 0.22)
@@ -421,6 +776,9 @@ static func _gate_v() -> ImageTexture:
 
 # Cổng chuồng gia cầm 48x28: Cổng gỗ mộc mạc hai cánh mở vào trong sân, có chốt cài, xà ngang biểu tượng gà
 static func _coop_gate() -> ImageTexture:
+	var loaded := _load_picture("res://picture/gate_coop.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(48, 28)
 	var wood_d := Color(0.38, 0.24, 0.12)
 	var wood_m := Color(0.56, 0.38, 0.22)
@@ -618,7 +976,19 @@ static func _highlight() -> ImageTexture:
 
 # ---------- cảnh vật ----------
 
+static func _tree_variant(var_name: String) -> ImageTexture:
+	var loaded := _load_picture("res://picture/%s.png" % var_name)
+	if loaded != null:
+		return _tex(loaded)
+	return _tree()
+
+
 static func _tree() -> ImageTexture:
+	var loaded := _load_picture("res://picture/tree_oak.png")
+	if loaded == null:
+		loaded = _load_picture("res://picture/tree.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(32, 48)
 	rect(img, 14, 32, 5, 14, Color(0.45, 0.30, 0.18))
 	px(img, 15, 34, Color(0.55, 0.38, 0.23))
@@ -634,6 +1004,9 @@ static func _tree() -> ImageTexture:
 
 
 static func _house() -> ImageTexture:
+	var loaded := _load_picture("res://picture/house.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(96, 80)
 	# mái ngói
 	for row in 28:
@@ -659,6 +1032,13 @@ static func _house() -> ImageTexture:
 		rect(img, wx - 1, 37, 16, 1, Color(0.55, 0.42, 0.28))
 		rect(img, wx - 1, 51, 16, 1, Color(0.55, 0.42, 0.28))
 	return _tex(img)
+
+
+static func _mailbox() -> ImageTexture:
+	var loaded := _load_picture("res://picture/mailbox.png")
+	if loaded != null:
+		return _tex(loaded)
+	return null
 
 
 static func _stand() -> ImageTexture:
@@ -1156,6 +1536,9 @@ static func _stand_fish_front() -> ImageTexture:
 
 
 static func _scarecrow() -> ImageTexture:
+	var loaded := _load_picture("res://picture/scarecrow.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(16, 28)
 	rect(img, 7, 8, 2, 19, Color(0.50, 0.35, 0.20))
 	rect(img, 3, 11, 10, 2, Color(0.50, 0.35, 0.20))
@@ -1259,53 +1642,36 @@ static func _coop() -> ImageTexture:
 	return _tex(img)
 
 
-# Mặt sàn lót rơm và đất mịn cho toàn bộ khu chuồng nuôi (224x128)
+# Mặt sàn lót rơm và rải hạt ngô cho khu chuồng nuôi (224x128, nền trong suốt hòa vào đất autotile)
 static func _pen_bedding() -> ImageTexture:
 	var img := _img(224, 128)
-	var dirt_base := Color(0.48, 0.40, 0.26)
-	var dirt_dark := Color(0.40, 0.32, 0.20)
-	var straw_base := Color(0.74, 0.62, 0.34)
-	var straw_light := Color(0.86, 0.74, 0.44)
+	var straw_base := Color(0.85, 0.72, 0.36)
+	var straw_light := Color(0.95, 0.84, 0.48)
+	var straw_dark := Color(0.68, 0.52, 0.24)
 	var corn_seed := Color(0.98, 0.86, 0.28)
 
-	# Tô nền đất ấm
-	for y in 128:
-		for x in 224:
-			var n := sin(x * 0.12) * cos(y * 0.14)
-			var base_c := dirt_base if n > 0.0 else dirt_dark
-			px(img, x, y, base_c)
-
-	# Lớp thảm rơm rải rác trong sân
+	# Nền trong suốt để hiển thị trọn vẹn nền đất autotile Stardew Valley với viền cỏ bo tròn bên dưới
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 999
+
+	# Lớp rơm rạ rải rác tự nhiên trong sân chuồng
 	for i in 650:
 		var rx := rng.randi_range(6, 217)
 		var ry := rng.randi_range(6, 121)
-		var len := rng.randi_range(2, 5)
+		var len := rng.randi_range(3, 6)
 		var c := straw_base if rng.randf() > 0.4 else straw_light
 		for l in len:
 			px(img, rx + l, ry, c)
+		if rng.randf() < 0.35:
+			px(img, rx + 1, ry + 1, straw_dark)
 
-	# Các hạt thóc / ngô vương vãi quanh khu ăn uống
-	for i in 120:
-		var cx := rng.randi_range(40, 160)
-		var cy := rng.randi_range(30, 95)
+	# Các hạt thóc / ngô vàng vương vãi quanh khu ăn uống
+	for i in 150:
+		var cx := rng.randi_range(30, 190)
+		var cy := rng.randi_range(20, 105)
 		px(img, cx, cy, corn_seed)
-
-	# Viền mép cỏ mọc tự nhiên quanh bờ rào
-	var grass_edge := Color(0.42, 0.58, 0.26)
-	for x in 224:
-		if rng.randf() > 0.3:
-			px(img, x, 0, grass_edge)
-			px(img, x, 1, grass_edge)
-			px(img, x, 127, grass_edge)
-			px(img, x, 126, grass_edge)
-	for y in 128:
-		if rng.randf() > 0.3:
-			px(img, 0, y, grass_edge)
-			px(img, 1, y, grass_edge)
-			px(img, 223, y, grass_edge)
-			px(img, 222, y, grass_edge)
+		if rng.randf() < 0.25:
+			px(img, cx + 1, cy, Color(0.92, 0.76, 0.20))
 
 	return _tex(img)
 
@@ -1459,6 +1825,9 @@ static func animal_sprite(shape: String, color_hex: String) -> ImageTexture:
 
 
 static func _fence_h() -> ImageTexture:
+	var loaded := _load_picture("res://picture/fence_h.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(32, 18)
 	var wood := Color(0.60, 0.42, 0.24)
 	var light := Color(0.76, 0.56, 0.34)
@@ -1503,6 +1872,9 @@ static func _fence_h() -> ImageTexture:
 
 
 static func _fence_v() -> ImageTexture:
+	var loaded := _load_picture("res://picture/fence_v.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(18, 32)
 	var wood := Color(0.60, 0.42, 0.24)
 	var light := Color(0.76, 0.56, 0.34)
@@ -1534,6 +1906,9 @@ static func _fence_v() -> ImageTexture:
 
 
 static func _fence_corner() -> ImageTexture:
+	var loaded := _load_picture("res://picture/fence_corner.png")
+	if loaded != null:
+		return _tex(loaded)
 	var img := _img(22, 22)
 	var wood := Color(0.60, 0.42, 0.24)
 	var light := Color(0.76, 0.56, 0.34)
@@ -1547,6 +1922,7 @@ static func _fence_corner() -> ImageTexture:
 	rect(img, 6, 2, 10, 18, wood)
 	rect(img, 6, 2, 2, 18, light)
 	rect(img, 14, 2, 2, 18, dark)
+
 
 	# Chóp cọc vát hình kim tự tháp
 	rect(img, 8, 1, 6, 1, light)
@@ -1566,12 +1942,42 @@ static func _fence_corner() -> ImageTexture:
 	return _tex(img)
 
 
+static func _fence_corner_dir(dir: String) -> ImageTexture:
+	var loaded := _load_picture("res://picture/fence_corner_" + dir + ".png")
+	if loaded != null:
+		return _tex(loaded)
+	return _fence_corner()
+
+
 # ---------- nhân vật (nón lá!) ----------
 
 static func char_tex(dir: String, frame: int, npc: bool = false) -> ImageTexture:
 	var key := "char_%s_%d_%d" % [dir, frame, 1 if npc else 0]
 	if _cache.has(key):
 		return _cache[key]
+
+	if not npc:
+		var pic_name := ""
+		if frame == 99:
+			pic_name = "farmer_%s_action" % dir
+		else:
+			var sub_frame := 0
+			match frame:
+				0, 2:
+					sub_frame = 0
+				1:
+					sub_frame = 1
+				3:
+					sub_frame = 2
+				_:
+					sub_frame = frame % 3
+			pic_name = "farmer_%s_%d" % [dir, sub_frame]
+		var loaded := _load_picture("res://picture/%s.png" % pic_name)
+		if loaded != null:
+			var t := _tex(loaded)
+			_cache[key] = t
+			return t
+
 	var img := _img(16, 16)
 	var skin := Color(0.95, 0.79, 0.60)
 	var hair := Color(0.28, 0.20, 0.13)
@@ -1872,12 +2278,20 @@ static func crop_tex(crop: Dictionary, stage: int) -> ImageTexture:
 	var key := "crop_%s_%d" % [crop.id, stage]
 	if _cache.has(key):
 		return _cache[key]
-	# Cây đã chín: dùng ảnh chính trong thư mục picture/ thay cho pixel-art.
-	if stage >= 3:
-		var pic := ripe_picture_tex(str(crop.id))
-		if pic != null:
-			_cache[key] = pic
-			return pic
+	var path := "res://picture/crops/crop_%s_stage_%d.png" % [crop.id, stage]
+	var loaded := _load_picture(path)
+	if loaded != null:
+		var tex := _tex(loaded)
+		_cache[key] = tex
+		return tex
+	# Nếu vượt quá stage, thử lấy stage chín cao nhất có sẵn
+	for s in range(stage - 1, -1, -1):
+		var fallback_path := "res://picture/crops/crop_%s_stage_%d.png" % [crop.id, s]
+		var fallback_loaded := _load_picture(fallback_path)
+		if fallback_loaded != null:
+			var tex := _tex(fallback_loaded)
+			_cache[key] = tex
+			return tex
 	var img := _img(16, 16)
 	var accent := Color(str(crop.color))
 	var leaf := Color(str(crop.leaf))
@@ -2138,6 +2552,12 @@ static func seed_icon(crop: Dictionary) -> ImageTexture:
 	var key := "seed_icon_%s" % crop.id
 	if _cache.has(key):
 		return _cache[key]
+	var path := "res://picture/crops/seed_%s.png" % crop.id
+	var loaded := _load_picture(path)
+	if loaded != null:
+		var tex := _tex(loaded)
+		_cache[key] = tex
+		return tex
 	var img := _img(16, 16)
 	var bag := Color(0.84, 0.72, 0.50)
 	var bagd := Color(0.66, 0.54, 0.34)
@@ -2175,6 +2595,12 @@ static func prod_icon(crop: Dictionary) -> ImageTexture:
 	var key := "prod_icon_%s" % crop.id
 	if _cache.has(key):
 		return _cache[key]
+	var path := "res://picture/crops/prod_%s.png" % crop.id
+	var loaded := _load_picture(path)
+	if loaded != null:
+		var tex := _tex(loaded)
+		_cache[key] = tex
+		return tex
 	var img := _img(16, 16)
 	var accent := Color(str(crop.color))
 	var leaf := Color(str(crop.leaf))

@@ -15,15 +15,15 @@ const NODES := {
 	"j_pen": Vector2(304, 470),
 	"pen": Vector2(304, 574),
 	"farm_w": Vector2(408, 470),
-	"farm": Vector2(644, 470),
+	"farm": Vector2(648, 470),
 	"j_tu": Vector2(1010, 470),
-	"tu": Vector2(1010, 400),
+	"tu": Vector2(1010, 430),
 	"j_pond": Vector2(1030, 470),
 	"pond": Vector2(1030, 748),
 	"j_batu": Vector2(1180, 470),
-	"batu": Vector2(1180, 400),
+	"batu": Vector2(1180, 430),
 	"j_hai": Vector2(1350, 470),
-	"hai": Vector2(1350, 400),
+	"hai": Vector2(1350, 430),
 }
 const EDGES := [
 	["house", "j_house"], ["j_house", "j_pen"], ["j_pen", "pen"],
@@ -38,11 +38,11 @@ const EDGES := [
 # "mlabel" là tên ngắn vẽ trên bản đồ; "mlab_above" đẩy nhãn lên trên điểm.
 const POIS := [
 	{"id": "house", "name": "Nhà (ngủ & lưu game)", "mlabel": "Nhà (ngủ & lưu)", "pos": Vector2(250, 250), "color": Color(0.98, 0.62, 0.45), "letter": "N"},
-	{"id": "farm", "name": "Nông trại", "mlabel": "Nông trại", "pos": Vector2(644, 470), "color": Color(0.55, 0.88, 0.42), "letter": "R"},
+	{"id": "farm", "name": "Nông trại", "mlabel": "Nông trại", "pos": Vector2(648, 470), "color": Color(0.55, 0.88, 0.42), "letter": "R"},
 	{"id": "pen", "name": "Chuồng gia cầm", "mlabel": "Chuồng gia cầm", "pos": Vector2(304, 574), "color": Color(0.85, 0.65, 0.35), "letter": "C"},
-	{"id": "tu", "name": "Quầy Cô Tư (gia cầm)", "mlabel": "Cô Tư — gia cầm", "mlab_above": true, "pos": Vector2(1010, 400), "color": Color(1.0, 0.68, 0.3), "letter": "T"},
-	{"id": "batu", "name": "Quầy Bác Tư (hạt giống)", "mlabel": "Bác Tư — hạt giống", "pos": Vector2(1180, 400), "color": Color(1.0, 0.86, 0.3), "letter": "B"},
-	{"id": "hai", "name": "Quầy Chú Hai (cần & cá)", "mlabel": "Chú Hai — cá", "mlab_above": true, "pos": Vector2(1350, 400), "color": Color(0.45, 0.82, 0.95), "letter": "H"},
+	{"id": "tu", "name": "Quầy Cô Tư (gia cầm)", "mlabel": "Cô Tư — gia cầm", "mlab_above": true, "pos": Vector2(1010, 430), "color": Color(1.0, 0.68, 0.3), "letter": "T"},
+	{"id": "batu", "name": "Quầy Bác Tư (hạt giống)", "mlabel": "Bác Tư — hạt giống", "pos": Vector2(1180, 430), "color": Color(1.0, 0.86, 0.3), "letter": "B"},
+	{"id": "hai", "name": "Quầy Chú Hai (cần & cá)", "mlabel": "Chú Hai — cá", "mlab_above": true, "pos": Vector2(1350, 430), "color": Color(0.45, 0.82, 0.95), "letter": "H"},
 	{"id": "pond", "name": "Ao câu cá", "mlabel": "Ao câu cá", "pos": Vector2(1030, 748), "color": Color(0.35, 0.6, 0.95), "letter": "A"},
 ]
 

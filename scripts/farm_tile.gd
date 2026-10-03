@@ -1,5 +1,5 @@
 extends Node2D
-# Một ô đất trong nông trại: cỏ -> đất cày -> đã gieo hạt.
+# Một ô đất trong nông trại: đất mộc (không cỏ) -> đất cày -> đã gieo hạt.
 # Cây lớn dần theo THỜI GIAN THẬT khi đất ẩm; đất khô sau ~4 phút thì phải tưới lại.
 
 const TextureGen := preload("res://scripts/texture_gen.gd")
@@ -14,6 +14,7 @@ var crop_id := ""
 var growth := 0.0  # số giây đã lớn (đất ẩm)
 var watered := false
 var coord := Vector2i.ZERO
+var farm: Node2D = null
 
 var _soil: Sprite2D
 var _crop_spr: Sprite2D
@@ -27,6 +28,7 @@ func _ready() -> void:
 	_soil.visible = false
 	add_child(_soil)
 	_crop_spr = Sprite2D.new()
+	_crop_spr.offset = Vector2(0, -16)
 	_crop_spr.visible = false
 	add_child(_crop_spr)
 
@@ -67,16 +69,20 @@ func tick_growth(delta: float) -> void:
 func till() -> void:
 	tstate = TState.TILLED
 	refresh()
+	notify_horizontal_neighbors()
 
 
 func plant(id: String) -> void:
 	crop_id = id
 	growth = 0.0
+	_last_stage = -1
 	tstate = TState.PLANTED
 	refresh()
 
 
 func water() -> void:
+	if tstate != TState.PLANTED:
+		return
 	watered = true
 	_wet_time = 0.0
 	refresh()
@@ -108,17 +114,29 @@ func reset_tile() -> void:
 	_wet_time = 0.0
 	_last_stage = -1
 	refresh()
+	notify_horizontal_neighbors()
 
 
 func refresh() -> void:
 	if _soil == null:
 		return
-	_soil.visible = true
 	if tstate == TState.GRASS:
-		_soil.texture = TextureGen.get_tex("field")
+		_soil.visible = false
 		_crop_spr.visible = false
 		return
-	_soil.texture = TextureGen.get_tex("tilled_wet" if watered else "tilled")
+	_soil.visible = true
+	var w: bool = _has_soil(Vector2i(-1, 0))
+	var e: bool = _has_soil(Vector2i(1, 0))
+	var dir_type := "isolated"
+	if not w and e:
+		dir_type = "left"
+	elif w and e:
+		dir_type = "mid"
+	elif w and not e:
+		dir_type = "right"
+
+	var tex_key := "tilled_wet_%s" % dir_type if watered else "tilled_%s" % dir_type
+	_soil.texture = TextureGen.get_tex(tex_key)
 	if tstate == TState.PLANTED:
 		var c := CropDB.get_crop(crop_id)
 		if c.is_empty():
@@ -131,13 +149,43 @@ func refresh() -> void:
 		_crop_spr.visible = false
 
 
+func _has_soil(offset: Vector2i) -> bool:
+	var f := farm
+	if f == null:
+		var p = get_parent()
+		if p is Node2D and ("tiles" in p):
+			f = p
+	if f == null or not ("tiles" in f):
+		return false
+	var neighbor = f.tiles.get(coord + offset)
+	return neighbor != null and neighbor.tstate != TState.GRASS
+
+
+func notify_horizontal_neighbors() -> void:
+	var f := farm
+	if f == null:
+		var p = get_parent()
+		if p is Node2D and ("tiles" in p):
+			f = p
+	if f == null or not ("tiles" in f):
+		return
+	var left_tile = f.tiles.get(coord + Vector2i(-1, 0))
+	if left_tile != null and left_tile.tstate != TState.GRASS:
+		left_tile.refresh()
+	var right_tile = f.tiles.get(coord + Vector2i(1, 0))
+	if right_tile != null and right_tile.tstate != TState.GRASS:
+		right_tile.refresh()
+
+
 func visual_stage(c: Dictionary) -> int:
-	var t := float(c.grow_sec)
+	var total_st: int = int(c.get("stages", 5))
+	var t := float(c.get("grow_sec", 60))
 	if growth >= t:
-		return 3
-	if growth < t * 0.5:
-		return 1
-	return 2
+		return total_st - 1
+	if growth <= 0.0:
+		return 0
+	var pct := clampf(growth / t, 0.0, 0.999)
+	return int(pct * (total_st - 1))
 
 
 func get_state() -> Dictionary:
@@ -154,3 +202,4 @@ func apply_state(d: Dictionary) -> void:
 	watered = bool(d.get("w", false))
 	_wet_time = 0.0
 	refresh()
+	notify_horizontal_neighbors()
